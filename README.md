@@ -16,7 +16,7 @@ The handlers are written in [rust](https://www.rust-lang.org/).
 ## How to compile  
 
   * Install the rust compiler, rustc, and package builder, cargo.
-  * Run **cargo build** to build a debug version of the executabl. **cargo build --release** will build a release version.
+  * Run **cargo build** to build a debug version of the executable. **cargo build --release** will build a release version.
   
 
 ## Extent endpoint
