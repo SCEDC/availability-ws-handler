@@ -1,12 +1,24 @@
 # Handlers for event and query endpoints of FDSN availability web service.
 
-The FDSN availability web service has to endpoint; extent and query. Please see the [spec](https://fdsn.org/webservices/fdsnws-availability-1.0.pdf) for details.  
+The FDSN availability web service has two endpoint; extent and query. Please see the [spec](https://fdsn.org/webservices/fdsnws-availability-1.0.pdf) for details.  
 
-Each of these end points have separate code that handle their requests. The code receive GET or POST requests, query database and write output in appropriate format. They also sanitize and validate the input to prevent XSS attacks.  
+Each of these end points have separate code that handle their requests. The code receive GET or POST requests, query database tables and write output in appropriate format. They also sanitize and validate the input to prevent XSS attacks.  
 
 The handlers are written in [rust](https://www.rust-lang.org/).  
   
+
+## Dependencies  
+
+  * Oracle instantclient 11.2 and up
+  * Set LD_LIBRARY_PATH to instantclient install location.
+
+
+## How to compile  
+
+  * Install the rust compiler, rustc, and package builder, cargo.
+  * Run **cargo build** to build a debug version of the executabl. **cargo build --release** will build a release version.
   
+
 ## Extent endpoint
 
 The handler for extent endpoint is called **extent**. 
@@ -95,7 +107,7 @@ OPTIONS:
 
 **config.d** is the configuration file for extent and **config_query.d** is for query.  
 
-The --cfg option can be used to provide config file. But if none is provided, a default config file is used and must be present at the same location as the handler.
+The --cfg/--config option can be used to provide config file. But if none is provided, a default config file is used and must be present at the same location as the handler.
 
 Each handler has it's own config file created in the parameter = value format, one on each line. Parameters included are  
 
