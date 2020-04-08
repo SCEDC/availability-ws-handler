@@ -21,7 +21,7 @@ use chrono::prelude::*;
 //to read POST input
 use std::io; 
 use std::io::prelude::*;
-use availability_handler::{QueryParam, ExtentOutput,  Settings, create_sql, write_headings, parse_configuration};
+use availability_handler::{QueryParam, ExtentOutput,  Settings, create_sql, write_headings, parse_configuration, format_datetime};
 
 
 fn main() {
@@ -180,11 +180,11 @@ fn main() {
                     }
                     if item.find("start") != None || item.find("starttime") != None {
                         temp = item.split('=').collect();
-                        query_param.starttime = String::from(temp[1])
+                        query_param.starttime = format_datetime(&String::from(temp[1]));
                     }
                     if item.find("end") != None || item.find("endtime") != None {
                         temp = item.split('=').collect();
-                        query_param.endtime = String::from(temp[1])
+                        query_param.endtime = format_datetime(&String::from(temp[1]));
                     }
                     if item.find("format") != None {
                         temp = item.split('=').collect();
@@ -199,17 +199,17 @@ fn main() {
                     format = String::from(temp_vec[1]);
                 } else if input_line.find("starttime") != None {
                     temp_vec = input_line.split("=").collect();
-                    starttime_global_input = String::from(temp_vec[1]);
+                    starttime_global_input = format_datetime(&String::from(temp_vec[1]));
                 } else if input_line.find("endtime") != None {
                     temp_vec = input_line.split("=").collect();
-                    endtime_global_input = String::from(temp_vec[1]);
+                    endtime_global_input = format_datetime(&String::from(temp_vec[1]));
                 } else {
                     let params: Vec<&str> = input_line.split(" ").collect();
                     
                     info!("{:?}, len of params = {}", params, params.len());
                     if params.len() == 6 {
-                        starttime = String::from(params[4]);
-                        endtime = String::from(params[5]);
+                        starttime = format_datetime(&String::from(params[4]));
+                        endtime = format_datetime(&String::from(params[5]));
                     } else {
                         starttime = starttime_global_input.clone();
                         endtime = endtime_global_input.clone();
@@ -272,11 +272,11 @@ fn main() {
         }
 
         if matches.value_of("starttime") != None {
-            query_param.starttime = String::from(matches.value_of("starttime").unwrap());
+            query_param.starttime = format_datetime(&String::from(matches.value_of("starttime").unwrap()));
         }        
              
         if matches.value_of("endtime") != None {
-            query_param.endtime = String::from(matches.value_of("endtime").unwrap());
+            query_param.endtime = format_datetime(&String::from(matches.value_of("endtime").unwrap()));
         }
 
         if matches.value_of("asset") != None {

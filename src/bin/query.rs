@@ -14,6 +14,7 @@ use std::env;
 use clap::{Arg, App};
 use regex::Regex;
 use std::process::exit;
+use std::error::Error;
 use std::collections::BTreeMap;
 use chrono::prelude::*;
 use oracle::Connection;
@@ -22,7 +23,7 @@ use std::io;
 use std::io::prelude::*;
 
 
-use availability_handler::{QueryParam, Output, Settings, create_sql, write_headings, parse_configuration};
+use availability_handler::{QueryParam, Output, Settings, create_sql, write_headings, parse_configuration, format_datetime, pad_datetime};
 
 
 fn main() {
@@ -67,12 +68,12 @@ fn main() {
 	.arg(Arg::with_name("starttime")
 	    .long("starttime")
   	    .value_name("start_time")
-	    .help("start date and time of request. format is yyyy-mm-ddThh:mm:ss[.ssssss]")
+	    .help("start date and time of request. format is yyyy-mm-ddThh:mm:ss[.sssss]")
 	    .takes_value(true))
 	.arg(Arg::with_name("endtime")
 	    .long("endtime")
 	    .value_name("end_time")
-	    .help("end date and time of request. format is yyyy-mm-ddThh:mm:ss[.ssssss]")
+	    .help("end date and time of request. format is yyyy-mm-ddThh:mm:ss[.sssss]")
 	    .takes_value(true))
         .arg(Arg::with_name("format")
             .long("format")
@@ -98,8 +99,6 @@ fn main() {
     }
     parse_configuration(cfgfile, &mut cfg);
     
-    //println!("{:?}", &cfg.logfileconfig.clone());                                                                       
-
     log4rs::init_file(&cfg.logfileconfig.clone(), Default::default()).unwrap();
 
     info!("----- NEW REQUEST ------");
@@ -118,7 +117,7 @@ fn main() {
     let mut starttime: String = String::from("");
     let mut endtime: String = String::from("");
     let mut starttime_global_input: String = String::from("");
-    let endtime_global_input: String = String::from("");
+    let mut endtime_global_input: String = String::from("");
     let mut debug = false;
     let mut list_of_query_params: Vec<QueryParam> = Vec::new();
     if matches.is_present("STDIN") { //POST request input        
@@ -172,11 +171,11 @@ fn main() {
                     }
                     if item.find("start") != None || item.find("starttime") != None {
                         temp = item.split('=').collect();
-                        query_param.starttime = String::from(temp[1])
+                        query_param.starttime = format_datetime(&String::from(temp[1]));
                     }
                     if item.find("end") != None || item.find("endtime") != None {
                         temp = item.split('=').collect();
-                        query_param.endtime = String::from(temp[1])
+                        query_param.endtime = format_datetime(&String::from(temp[1]));
                     }
                     if item.find("format") != None {
                         temp = item.split('=').collect();
@@ -191,20 +190,20 @@ fn main() {
                     format = String::from(temp_vec[1]);
                 } else if input_line.find("starttime") != None {
                     temp_vec = input_line.split("=").collect();
-                    starttime_global_input = String::from(temp_vec[1]);
+                    starttime_global_input = format_datetime(&String::from(temp_vec[1]));
                 } else if input_line.find("endtime") != None {
                     temp_vec = input_line.split("=").collect();
-                    //endtime_global_input = String::from(temp_vec[1]);
+                    endtime_global_input = format_datetime(&String::from(temp_vec[1]));
                 } else {
                     let params: Vec<&str> = input_line.split(" ").collect();
                     
                     info!("{:?}, len of params = {}", params, params.len());
                     if params.len() == 6 {
-                        starttime = String::from(params[4]);
-                        endtime = String::from(params[5]);
+                        starttime = format_datetime(&String::from(params[4]));
+                        endtime = format_datetime(&String::from(params[5]));
                     } else {
                         starttime = starttime_global_input.clone();
-                        endtime = starttime_global_input.clone();
+                        endtime = endtime_global_input.clone();
                     }
                     let mut query_param = QueryParam {
                         net: String::from(params[0]),
@@ -252,10 +251,11 @@ fn main() {
             query_param.loc = String::from(matches.value_of("loc").unwrap());
         }
         if matches.value_of("starttime") != None {
-            query_param.starttime = String::from(matches.value_of("starttime").unwrap());
+            query_param.starttime = format_datetime(&String::from(matches.value_of("starttime").unwrap())); 
+            
         }
         if matches.value_of("endtime") != None {
-            query_param.endtime = String::from(matches.value_of("endtime").unwrap());
+            query_param.endtime = format_datetime(&String::from(matches.value_of("endtime").unwrap())); 
         }        
 
         if matches.is_present("debug"){	    
@@ -328,8 +328,10 @@ fn handle_request(query_params: &Vec<QueryParam>, format: String, cfg: &Settings
         let mut location: String;
         let mut start: f64;
         let mut start_iso: String;
+        let mut starttime: String = "".to_string();
         let mut end: f64;
         let mut end_iso: String;
+        let mut endtime: String = "".to_string();
         let mut rate: f32;
         
         let mut sncl;
@@ -338,39 +340,44 @@ fn handle_request(query_params: &Vec<QueryParam>, format: String, cfg: &Settings
         let mut user_input_end: f64 = -1.0;
     
         if !param.starttime.is_empty() {
-            let mut starttime = param.starttime.clone();
-            if Regex::new(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d+$").unwrap().is_match(&param.starttime) || 
-                Regex::new(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$").unwrap().is_match(&param.starttime) {
-                    starttime.push_str(" +0000"); //add +0000 as DateTime::parse_from_str required timezone information
+            starttime = param.starttime.clone();
+            if Regex::new(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d+$").unwrap().is_match(&param.starttime) {
+                starttime.push_str(" +0000"); //add +0000 as DateTime::parse_from_str required timezone information  
+            } else if Regex::new(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$").unwrap().is_match(&param.starttime) {
+                    starttime.push_str(".000000 +0000"); //add +0000 as DateTime::parse_from_str required timezone information
             } else if Regex::new(r"^\d{4}-\d{2}-\d{2}").unwrap().is_match(&starttime) {
-                    starttime.push_str("T00:00:00 +0000");
-                }            
-
-            user_input_start = match DateTime::parse_from_str(&starttime,"%Y-%m-%dT%H:%M:%S %z") {
+                    starttime.push_str("T00:00:00.000000 +0000");
+            }            
+            
+            user_input_start = match DateTime::parse_from_str(&starttime,"%Y-%m-%dT%H:%M:%S.%f %z") {
                 Ok(v) => v.timestamp() as f64,
-                Err(e) => { println!("Icky error for starttime  {:?}", e);
+                Err(e) => { println!("Icky error for starttime  {:?} {:?}", e, e.description());
                             -1.0
                 }
             };
         }
 
         if !param.endtime.is_empty() {
-            let mut endtime = param.endtime.clone();
-            if Regex::new(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d+$").unwrap().is_match(&param.endtime) || 
-                Regex::new(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$").unwrap().is_match(&param.endtime) {
-                    endtime.push_str(" +0000"); //add +0000 as DateTime::parse_from_str required timezone information
-                } else if Regex::new(r"^\d{4}-\d{2}-\d{2}").unwrap().is_match(&param.endtime) {
-                    endtime.push_str("T00:00:00 +0000");
-                }
-
-            user_input_end = match DateTime::parse_from_str(&endtime,"%Y-%m-%dT%H:%M:%S %z") {
+            endtime = param.endtime.clone();
+            
+            if Regex::new(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d+$").unwrap().is_match(&param.endtime) { 
+                endtime.push_str(" +0000"); //add +0000 as DateTime::parse_from_str required timezone information
+            } else if Regex::new(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$").unwrap().is_match(&param.endtime) {
+                endtime.push_str(".00000 +0000"); //add +0000 as DateTime::parse_from_str required timezone information
+            } else if Regex::new(r"^\d{4}-\d{2}-\d{2}").unwrap().is_match(&param.endtime) {
+                endtime.push_str("T00:00:00.00000 +0000");
+            }
+            
+            //println!("endtime = {}", endtime);
+            user_input_end = match DateTime::parse_from_str(&endtime,"%Y-%m-%dT%H:%M:%S.%f %z") {
                 Ok(v) => v.timestamp() as f64,
-                Err(e) => { println!("Icky error for endtime {:?}", e);
+                Err(e) => { println!("Icky error for endtime {:?} {:?}", e, e.description());
                             -1.0
                 }
             };
+           
         }
-
+       
         info!("process result set");
         for row_result in &rows {
 
@@ -396,7 +403,7 @@ fn handle_request(query_params: &Vec<QueryParam>, format: String, cfg: &Settings
             if !output.contains_key(&sncl) { //initialize
                 //if user specified start is between first record's start and end, start output with user input value
                 if user_input_start > start && user_input_start < end && !param.starttime.is_empty() {
-                    start_iso = param.starttime.clone();
+                    start_iso = pad_datetime(&format_datetime(&param.starttime.clone()));
                 }
                 let temp = Output {
                     net: net,
@@ -413,8 +420,7 @@ fn handle_request(query_params: &Vec<QueryParam>, format: String, cfg: &Settings
                 //if user specified end is not a day boundary, update the end date of last record for the sncl to match user specified end
                 if !prev_sncl.is_empty() && !param.endtime.is_empty() { 
                     if user_input_end < output.get(&prev_sncl).unwrap().last().unwrap().end {
-                        output.get_mut(&prev_sncl).unwrap().last_mut().unwrap().end_iso = param.endtime.clone();
-                        output.get_mut(&prev_sncl).unwrap().last_mut().unwrap().end_iso.push_str(".000000Z");
+                        output.get_mut(&prev_sncl).unwrap().last_mut().unwrap().end_iso = pad_datetime(&param.endtime.clone());
                     }
                 }
                 continue;
@@ -443,8 +449,7 @@ fn handle_request(query_params: &Vec<QueryParam>, format: String, cfg: &Settings
         //if user specified end is not a day boundary, update the end date of last record for the sncl to match user specified end
         if !prev_sncl.is_empty() && !param.endtime.is_empty() {
             if user_input_end < output.get(&prev_sncl).unwrap().last().unwrap().end {
-                output.get_mut(&prev_sncl).unwrap().last_mut().unwrap().end_iso = param.endtime.clone();
-                output.get_mut(&prev_sncl).unwrap().last_mut().unwrap().end_iso.push_str(".000000Z");
+                output.get_mut(&prev_sncl).unwrap().last_mut().unwrap().end_iso = pad_datetime(&param.endtime.clone());
             }
         }
         //info!("OUTPut {:?}", output);

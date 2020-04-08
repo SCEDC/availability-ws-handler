@@ -6,7 +6,8 @@ use std::io::prelude::*;
 use std::error::Error;
 use std::fs::File;
 use std::path::Path;
-
+//remove
+use std::process::exit;
 
 #[derive(Debug)]
 pub struct QueryParam {
@@ -55,13 +56,12 @@ pub struct Settings {
 
 
 pub fn parse_configuration(filename: String, config : &mut Settings) {
-
+    
+    let temp = filename.clone();
     // Open the path in read-only mode, returns `io::Result<File>`                                                        
     let mut file = match File::open(filename) {
-        // The `description` method of `io::Error` returns a string that                                                                                                                                        
-        // describes the error                                                                         
-        Err(why) => panic!("couldn't open file {}",
-                                                   why.description()),
+        // The `description` method of `io::Error` returns a string that                                                                                                                  // describes the error                                                                         
+        Err(why) => panic!("couldn't open file: {} {}. Use --config to provide a config file with path. ",temp, why.description()),
         Ok(file) => file,
     };
  
@@ -133,8 +133,8 @@ pub fn create_sql(dbtable: String, query_param: &QueryParam, sql: &mut String) {
     let mut sta_str: String = "".to_string();
     let mut chan_str: String = "".to_string();
     let mut loc_str: String = "".to_string();
-    let mut starttime_str: String;
-    let mut endtime_str: String;
+    let mut starttime_str: String = "".to_string();
+    let mut endtime_str: String = "".to_string();
 
     sql.push_str(" from ");
     sql.push_str(&dbtable);
@@ -165,29 +165,29 @@ pub fn create_sql(dbtable: String, query_param: &QueryParam, sql: &mut String) {
         append_to_sql(&loc_str, sql);
     }
 
+    
     if !query_param.starttime.is_empty() && !query_param.endtime.is_empty() {
-         starttime_str = query_param.starttime.clone();
+         starttime_str = query_param.starttime.clone();                                                                                                                           
          starttime_str = starttime_str.replace("-","/").replace("T"," ");
-         endtime_str = query_param.endtime.clone();
+         endtime_str = query_param.endtime.clone();                                                                                                                               
          endtime_str = endtime_str.replace("-","/").replace("T"," ");
-
          sql.push_str(" and (");
-         sql.push_str(" ( datetime_on <= truetime.string2nominal('");
+         sql.push_str(" ( datetime_on <= truetime.string2nominalf('");
          sql.push_str(&starttime_str);
-         sql.push_str("') and datetime_off >= truetime.string2nominal('");
+         sql.push_str("') and datetime_off >= truetime.string2nominalf('");
          sql.push_str(&endtime_str);
          sql.push_str("') )");
 
          sql.push_str(" OR ");
-         sql.push_str(" ( datetime_on between truetime.string2nominal('");
+         sql.push_str(" ( datetime_on between truetime.string2nominalf('");
          sql.push_str(&starttime_str);
-         sql.push_str("') and truetime.string2nominal('");
+         sql.push_str("') and truetime.string2nominalf('");
          sql.push_str(&endtime_str);
          sql.push_str("') ");
 
-         sql.push_str(" OR datetime_off between truetime.string2nominal('");
+         sql.push_str(" OR datetime_off between truetime.string2nominalf('");
          sql.push_str(&starttime_str);
-         sql.push_str("') and truetime.string2nominal('");
+         sql.push_str("') and truetime.string2nominalf('");
          sql.push_str(&endtime_str);
          sql.push_str("') )");
          sql.push_str(" )");
@@ -195,14 +195,14 @@ pub fn create_sql(dbtable: String, query_param: &QueryParam, sql: &mut String) {
         starttime_str = query_param.starttime.clone();
         starttime_str = starttime_str.replace("-","/").replace("T"," ");
         sql.push_str(" and ");
-        sql.push_str(" datetime_off >= truetime.string2nominal('");
+        sql.push_str(" datetime_off >= truetime.string2nominalf('");
         sql.push_str(&starttime_str);
         sql.push_str("')");
     } else if !query_param.endtime.is_empty() {
         endtime_str = query_param.endtime.clone();
         endtime_str = endtime_str.replace("-","/").replace("T"," ");
         sql.push_str(" and ");
-        sql.push_str(" datetime_on <= truetime.string2nominal('");
+        sql.push_str(" datetime_on <= truetime.string2nominalf('");
         sql.push_str(&endtime_str);
         sql.push_str("')");
     }
@@ -255,6 +255,49 @@ pub fn append_to_sql(str_to_append: &String, sql: &mut String){
     sql.push_str(" ) ");
 }
 
+// a_datetime = yyyy-mm-ddThh:mm:ss.ssssssssss, convert it to yyyy-mm-ddThh:mm:ss.sssss
+// a_datetime = yyyy-mm-ddThh:mm:ss, convert it to yyyy-mm-ddThh:mm:ss.sssss
+// a_datetime = yyyy-mm-dd, convert it to yyyy-mm-ddThh:mm:ss.sssss
+pub fn format_datetime(a_datetime: &String) -> String {
+    
+    let mut out_datetime = a_datetime.clone();
+    let mut temp = a_datetime.clone();
+    if a_datetime.contains(".") {
+        let v: Vec<&str> = temp.split(".").collect();
+        if v[1].len() > 5 {
+            out_datetime = v[0].to_string();
+            let (keep, discard) = v[1].split_at(5);
+            out_datetime.push_str(".");
+            out_datetime.push_str(keep);
+        }
+        if v[1].len() < 5 {
+            let mut v: Vec<&str> = temp.split(".").collect();                                                                                                          
+            for _x in 0..5-v[1].len() {                                                                                                                                
+                out_datetime.push_str("0");                                                                                                                                
+            } 
+        }
+        
+    } else if a_datetime.contains("T") {
+        out_datetime.push_str(".00000");
+    } else {
+        out_datetime.push_str("T00:00:00.00000");
+    }
+    
+    return out_datetime;
+}
+
+// Use for output. pad a_datetime with 0 till 6 decimal places and end with Z
+pub fn pad_datetime(a_datetime: &String) -> String {
+    let mut out_datetime = a_datetime.clone();
+    let mut temp = a_datetime.clone();
+    let v: Vec<&str> = temp.split(".").collect();
+    for _x in 0..6-v[1].len() {
+        out_datetime.push_str("0");
+    }
+    out_datetime.push_str("Z");
+    return out_datetime;
+}
+
 pub fn write_headings(format: &String){
     if format == "text" {
         println! ("{n:<width$} {s:<widths$} {l:<widthl$} {c:<widthc$} {q:widthq$} {rate:<widthr$} {earliest:<widthe$} {latest:widthld$} {updated:widthu$} {timespans:widtht$} {restriction}", n="#Network", width=2, s="Station", widths=5, l="Location", widthl=2, c="Channel", widthc=3, q="Quality", widthq=1, rate="SampleRate", widthr=6, earliest="Earliest", widthe=8, latest="Latest", widthld=6, updated="Updated", widthu=4, timespans="TimeSpans", widtht=4, restriction="Restriction"); 
@@ -266,3 +309,4 @@ pub fn write_headings(format: &String){
         println!("Network|Station|Location|Channel|Quality|SampleRate|Earliest|Latest|Updated|TimeSpans|Restriction");
     }
 }
+
