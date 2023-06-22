@@ -275,9 +275,8 @@ fn main() {
     }
     
     info!("handle_request");
-    if handle_request(&list_of_query_params, format, &cfg, debug) > 0 { //handle_request returns 3 in case of errors
-        exit(3);
-    }
+    let ret_val: i32 = handle_request(&list_of_query_params, format, &cfg, debug);    
+    exit(ret_val);    
 } //end of main
 
 
@@ -305,8 +304,8 @@ fn handle_request(query_params: &Vec<QueryParam>, format: String, cfg: &Settings
     let mut output: BTreeMap<String, Vec<Output>> = BTreeMap::new();
 
     //OUTPUT HEADINGS    
-    info!("write_headings");
-    write_headings(&format);
+    // info!("write_headings");
+    // write_headings(&format);
     for param in query_params {
         sql = String::from("select net, sta, seedchan, location, samplerate, datetime_on, datetime_off, truetime.nominal2stringf(datetime_on) || '00', truetime.nominal2stringf(datetime_off) || '00' "); 
         info!("{:?}", &param);
@@ -320,7 +319,7 @@ fn handle_request(query_params: &Vec<QueryParam>, format: String, cfg: &Settings
         }
     
         let mut stmt = conn.prepare(&sql, &[]).unwrap();
-        let rows = stmt.query(&[]).unwrap();
+        let rows = stmt.query(&[]).unwrap();        
     
         let mut net: String;
         let mut sta: String;
@@ -379,9 +378,8 @@ fn handle_request(query_params: &Vec<QueryParam>, format: String, cfg: &Settings
         }
        
         info!("process result set");
-        for row_result in &rows {
-
-            let row = row_result.unwrap();        
+        for row_result in &rows {            
+            let row = row_result.unwrap();                    
             net = row.get(0).unwrap();
             sta = row.get(1).unwrap();
             chan = row.get(2).unwrap();
@@ -452,6 +450,15 @@ fn handle_request(query_params: &Vec<QueryParam>, format: String, cfg: &Settings
                 output.get_mut(&prev_sncl).unwrap().last_mut().unwrap().end_iso = pad_datetime(&param.endtime.clone());
             }
         }
+        // println!("OUTPut is empty? {:?}", output.is_empty());
+        if output.is_empty() {
+            info!("no data found");
+            eprintln!("No data found for search criteria");
+            return 2
+        } else {
+            info!("write_headings");
+            write_headings(&format);
+        }
         //info!("OUTPut {:?}", output);
     } //end of for param in query_params
 
@@ -474,7 +481,7 @@ fn handle_request(query_params: &Vec<QueryParam>, format: String, cfg: &Settings
                           s=item.sta,widths=item.sta.len(),
                           l=item.loc.replace(" ","-"), widthl=2,
                           c=item.chan, widthc=3,
-                          q=" ", widthq=1,
+                          q="D", widthq=1,
                           r=item.sr,widthr=6,
                           earliest=item.start_iso,
                           latest=item.end_iso);
@@ -486,7 +493,7 @@ fn handle_request(query_params: &Vec<QueryParam>, format: String, cfg: &Settings
                          s=item.sta,widths=item.sta.len(),
                          l=item.loc.replace(" ",""), widthl=item.loc.replace(" ","").len(),
                          c=item.chan, widthc=3,
-                         q=" ", widthq=1,
+                         q="D", widthq=1,
                          r=item.sr,widthr=item.sr.to_string().len(),
                          earliest=item.start_iso,
                          latest=item.end_iso);
@@ -497,7 +504,7 @@ fn handle_request(query_params: &Vec<QueryParam>, format: String, cfg: &Settings
                     "station" => item.sta.clone(),
                     "location" => item.loc.clone().replace(" ",""),
                     "channel" => item.chan.clone(),
-                    "quality" => "",
+                    "quality" => "D",
                     "samplerate" => item.sr.clone(),
                     "earliest" => item.start_iso.clone(),
                     "latest" => item.end_iso.clone(),
